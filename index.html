@@ -94,18 +94,39 @@
         <ul id="nameList"></ul>
     </div>
 
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-database-compat.js"></script>
+
     <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "YOUR_API_KEY",
+            authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
+            databaseURL: "https://YOUR_PROJECT_ID-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT_ID.appspot.com",
+            messagingSenderId: "YOUR_SENDER_ID",
+            appId: "YOUR_APP_ID"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const database = firebase.database();
+        const namesRef = database.ref('names');
+
         const nameInput = document.getElementById('nameInput');
         const addButton = document.getElementById('addButton');
         const nameList = document.getElementById('nameList');
 
-        // Load names from localStorage or initialize empty array
-        let names = JSON.parse(localStorage.getItem('names')) || [];
+        // Load names from Firebase
+        let names = [];
 
-        // Function to save names to localStorage
-        function saveNames() {
-            localStorage.setItem('names', JSON.stringify(names));
-        }
+        // Real-time listener for names
+        namesRef.on('value', (snapshot) => {
+            names = snapshot.val() ? Object.values(snapshot.val()) : [];
+            renderList();
+        });
 
         // Function to render the list
         function renderList(filteredNames = names, isFiltered = false) {
@@ -121,9 +142,11 @@
                 deleteButton.style.display = isFiltered ? 'block' : 'none';
                 deleteButton.onclick = () => {
                     if (confirm(`Bạn có chắc muốn xóa "${name}" không?`)) {
-                        names = names.filter(n => n !== name);
-                        saveNames();
-                        renderList(names, isFiltered);
+                        namesRef.orderByValue().equalTo(name).once('value', (snapshot) => {
+                            snapshot.forEach((child) => {
+                                child.ref.remove();
+                            });
+                        });
                     }
                 };
                 
@@ -136,9 +159,6 @@
                 nameList.appendChild(li);
             });
         }
-
-        // Initial render
-        renderList();
 
         // Handle input changes
         nameInput.addEventListener('input', () => {
@@ -161,9 +181,7 @@
         addButton.addEventListener('click', () => {
             const newName = nameInput.value.trim();
             if (newName && !names.includes(newName)) {
-                names.push(newName);
-                saveNames();
-                renderList();
+                namesRef.push(newName);
                 nameInput.value = '';
                 addButton.style.display = 'none';
             }
